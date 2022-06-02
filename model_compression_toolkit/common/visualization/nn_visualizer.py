@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -38,7 +38,7 @@ def _get_compare_points(input_graph: Graph) -> Tuple[List[BaseNode], List[str]]:
     """
     compare_points = []
     compare_points_name = []
-    for n in input_graph.nodes():
+    for n in input_graph.get_topo_sorted_nodes():
         tensors = input_graph.get_out_stats_collector(n)
         if (not isinstance(tensors, list)) and tensors.require_collection():
             compare_points.append(n)
@@ -88,19 +88,23 @@ class NNVisualizer:
                                                          append2output=self.compare_points_float,
                                                          fw_info=self.fw_info)
 
-    def plot_cs_graph(self,
-                      input_image: np.ndarray,
-                      y_limits: Tuple[float, float] = (-1.2, 1.2)) -> Figure:
+    def plot_distance_graph(self,
+                            input_image: np.ndarray,
+                            distance_fn: Callable = compute_cs,
+                            convert_to_range: Callable = lambda a: a) -> Figure:
         """
         Compare and plot the outputs of the quantized and the float versions
         of a neural network that KerasNNVisualizer has.
 
         Args:
             input_image: Image to use as input to the networks.
-            y_limits: Limits for y axis of the plot.
+            distance_fn: Distance function to calculate the distance between two tensors.
+            convert_to_range: Optional function to move the distance values into a specific range, e.g., when using
+                cosine similarity for distance, use 'lambda a: 1 - 2 * a' to convert the distance values to the range
+                of [-1, 1].
 
         Returns:
-            Figure of the cosine similarity per layer.
+            Figure of the distance per layer.
         """
 
         # To compare cosine similarity, we use a single image as input (per input),
@@ -114,16 +118,18 @@ class NNVisualizer:
         tensors_float = self.float_model(new_inputs)
         tensors_fxp = self.quantized_model(new_inputs)
 
-        # Compute cosine similarities between couples of outputs.
-        cs_array = np.asarray(
-            [compute_cs(t_float.numpy(), t_fxp.numpy()) for t_float, t_fxp in zip(tensors_float, tensors_fxp)])
+        # Compute distance between couples of outputs.
+        distance_array = np.asarray(
+            [distance_fn(t_float.numpy(), t_fxp.numpy()) for t_float, t_fxp in zip(tensors_float, tensors_fxp)])
 
-        cs_array = 1 - 2 * cs_array  # Convert cs to range of [-1, 1] as compute_cs range is [0, 1] (smaller -> more similar)
-        # Display the result: cosine similarity at every layer's output.
+        distance_array = convert_to_range(distance_array)
+        # Display the result: distance at every layer's output.
         fig = plt.figure()
-        plt.plot(cs_array)
+        plt.plot(distance_array)
+        eps = 0.5
+        y_limits = (min(distance_array) - eps, max(distance_array) + eps)
         plt.ylim(y_limits)
         plt.grid()
         plt.xlabel('Layer')
-        plt.ylabel('Cosine Similarity')
+        plt.ylabel('Distance')
         return fig

@@ -19,6 +19,7 @@ import os
 from functools import partial
 from typing import Callable, Tuple, Any
 
+from model_compression_toolkit.common.similarity_analyzer import compute_mse, compute_cs
 from model_compression_toolkit.common.visualization.nn_visualizer import NNVisualizer
 from tqdm import tqdm
 
@@ -28,7 +29,7 @@ from model_compression_toolkit.common.gptq.gptq_config import GradientPTQConfig
 from model_compression_toolkit.common.framework_implementation import FrameworkImplementation
 from model_compression_toolkit.common.mixed_precision.kpi import KPI
 from model_compression_toolkit.common import FrameworkInfo
-from model_compression_toolkit.common.constants import NUM_SAMPLES_CS_TENSORBOARD
+from model_compression_toolkit.common.constants import NUM_SAMPLES_DISTANCE_TENSORBOARD
 from model_compression_toolkit.common.graph.base_graph import Graph
 from model_compression_toolkit.common.mixed_precision.bit_width_setter import set_bit_widths
 from model_compression_toolkit.common.gptq.gptq_training import gptq_training
@@ -347,9 +348,11 @@ def _analyze_similarity(representative_data_gen: Callable,
                               fw_impl=fw_impl,
                               fw_info=fw_info)
 
-        for i in range(NUM_SAMPLES_CS_TENSORBOARD):
-            figure = visual.plot_cs_graph(representative_data_gen())
-            tb_w.add_figure(figure, f'cosine_similarity_sample_{i}')
+        for i in range(NUM_SAMPLES_DISTANCE_TENSORBOARD):
+            figure = visual.plot_distance_graph(representative_data_gen(),
+                                                distance_fn=compute_cs,
+                                                convert_to_range=lambda a: 1 - 2 * a)
+            tb_w.add_figure(figure, f'similarity_distance_sample_{i}')
 
         tb_w.close()
 
